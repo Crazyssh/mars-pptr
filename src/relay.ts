@@ -21,10 +21,11 @@ async function applyCookies(page: Page) {
   push("PHPSESSID", c.phpsessid);
   push("user_id", c.userId);
   push("expires_at", c.expiresAt);
-  push("cf_clearance", c.cfClearance);
+  // cf_clearance SENGAJA gak di-inject: kebind ke IP lain -> bikin CF curiga.
+  // Biarin browser generate sendiri pas lewatin challenge.
   if (items.length) {
     await page.setCookie(...items);
-    log(`set ${items.length} cookie`);
+    log(`set ${items.length} cookie login (tanpa cf_clearance)`);
   }
 }
 
@@ -44,6 +45,16 @@ async function isChallenge(page: Page): Promise<boolean> {
   }
 }
 
+/** Tunggu challenge kelar SENDIRI (gak reload). CF auto-navigate pas solved. */
+async function waitForChallengeClear(page: Page, maxMs = 30000): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < maxMs) {
+    await new Promise((r) => setTimeout(r, 3000));
+    if (!(await isChallenge(page))) return true;
+  }
+  return false;
+}
+
 /** Push array order ke Mars ingest. */
 async function pushToIngest(orders: unknown[]): Promise<void> {
   try {
@@ -60,12 +71,17 @@ async function pushToIngest(orders: unknown[]): Promise<void> {
   }
 }
 
-/** 1x poll: fetch infoOrder dari konteks browser (pakai cookie + cf_clearance browser). */
+/** 1x poll. */
 async function pollOnce(page: Page): Promise<void> {
   if (await isChallenge(page)) {
-    log("challenge Cloudflare kedeteksi - reload, nunggu browser solve...");
-    await page.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
-    await new Promise((r) => setTimeout(r, 6000));
+    log("challenge CF kedeteksi - nunggu browser solve (gak reload)...");
+    const cleared = await waitForChallengeClear(page, 30000);
+    if (cleared) {
+      log("challenge kelar, lanjut polling.");
+    } else {
+      log("challenge belum kelar 30s - reload sekali, coba lagi.");
+      await page.reload({ waitUntil: "networkidle2", timeout: 60000 }).catch(() => {});
+    }
     return;
   }
 
@@ -84,9 +100,6 @@ async function pollOnce(page: Page): Promise<void> {
 
   if (result.status !== 200) {
     log(`fetch HTTP ${result.status}`);
-    if (result.status === 403 || result.status === 503) {
-      await page.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
-    }
     return;
   }
 
@@ -117,17 +130,24 @@ export async function runRelay(): Promise<void> {
       "--disable-background-timer-throttling",
       "--disable-backgrounding-occluded-windows",
       "--disable-renderer-backgrounding",
+      "--window-size=1280,800",
     ],
   });
 
   const page = await browser.newPage();
+  await page.setViewport({ width: 1280, height: 800 });
   await applyCookies(page);
-  log("navigate ke target...");
-  await page.goto(config.targetBase, { waitUntil: "domcontentloaded", timeout: 60000 }).catch((e) => {
+  log("navigate ke target (nunggu challenge kelar dulu)...");
+  await page.goto(config.targetBase, { waitUntil: "networkidle2", timeout: 90000 }).catch((e) => {
     log("goto error:", (e as Error).message);
   });
+  // Kasih waktu challenge awal kelar sebelum mulai polling.
+  if (await isChallenge(page)) {
+    log("challenge awal - nunggu solve...");
+    const ok = await waitForChallengeClear(page, 40000);
+    log(ok ? "challenge awal kelar." : "challenge awal belum kelar 40s (IP mungkin di-throttle).");
+  }
 
-  // Loop polling fixed-interval (gak overlap - Puppeteer 1 page = sequential).
   let stopped = false;
   const loop = async () => {
     while (!stopped) {

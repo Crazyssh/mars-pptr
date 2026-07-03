@@ -120,21 +120,30 @@ async function pollOnce(page: Page): Promise<void> {
 export async function runRelay(): Promise<void> {
   log(`start - target ${config.targetBase}, interval ${config.pollIntervalMs}ms, headless=${config.headless}`);
 
+  const launchArgs = [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-background-timer-throttling",
+    "--disable-backgrounding-occluded-windows",
+    "--disable-renderer-backgrounding",
+    "--window-size=1280,800",
+  ];
+  if (config.proxy.server) {
+    launchArgs.push(`--proxy-server=${config.proxy.server}`);
+    log(`pakai proxy: ${config.proxy.server}`);
+  }
+
   const browser: Browser = await puppeteer.launch({
     headless: config.headless,
     executablePath: config.chromePath,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-background-timer-throttling",
-      "--disable-backgrounding-occluded-windows",
-      "--disable-renderer-backgrounding",
-      "--window-size=1280,800",
-    ],
+    args: launchArgs,
   });
 
   const page = await browser.newPage();
+  if (config.proxy.user) {
+    await page.authenticate({ username: config.proxy.user, password: config.proxy.pass });
+  }
   await page.setViewport({ width: 1280, height: 800 });
   await applyCookies(page);
   log("navigate ke target (nunggu challenge kelar dulu)...");

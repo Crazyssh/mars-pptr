@@ -1,0 +1,22 @@
+{
+  "name": "mars-pptr",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Puppeteer relay - headless browser polling infoOrder ditznesia, push ke Mars ingest.",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "puppeteer": "^23.11.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

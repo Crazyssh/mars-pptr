@@ -137,6 +137,7 @@ export async function runRelay(): Promise<void> {
   const browser: Browser = await puppeteer.launch({
     headless: config.headless,
     executablePath: config.chromePath,
+    userDataDir: config.userDataDir,
     args: launchArgs,
   });
 

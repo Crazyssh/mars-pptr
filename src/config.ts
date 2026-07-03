@@ -23,6 +23,7 @@ export const config = {
 
   headless: (process.env.HEADLESS ?? "true").toLowerCase() !== "false",
   chromePath: process.env.CHROME_PATH || undefined,
+  userDataDir: process.env.USER_DATA_DIR || undefined,
 
   // Residential/mobile proxy (biar dapet IP fast-lane, bukan datacenter).
   // Contoh: PROXY_SERVER=http://gate.provider.com:8000
